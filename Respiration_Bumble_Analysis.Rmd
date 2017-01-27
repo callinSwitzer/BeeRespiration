@@ -1,0 +1,542 @@
+---
+title: "Bee Respiration for Susie and Stacey"
+author: "Callin Switzer"
+date: "11/4/2016, Update: 12/13/2016, Update: 27 Jan 2017"
+output: html_document
+---
+
+Analyses of respirometry data:
+
+1.	How does carrying a load during flight affect bumblebees’?
+     a.	How does load affect respiratory rate?
+     b.	How does load affect wingbeat frequency?
+     c.	How does load affect stroke amplitude?
+     d.	How does load affect wing velocity?
+
+2.	Which flight measurements are most closely associated with respiratory rate in bees – wingbeat frequency, stroke amplitude, or wing velocity?
+
+---
+
+Install required packages and read in data
+Define custom function for evaluating VIF with multilevel models
+
+```{r}
+ipak <- function(pkg){
+     new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+     if(length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+     sapply(pkg, require, character.only = TRUE)
+}
+
+packages <- c('ggplot2', 'car', 'lme4', 'gsheet', "MASS")
+ipak(packages)
+
+# read in data -- google sheet called "Bumble mumble grumble"
+bdta <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1GUUoFq41Ep3sJNFXiyMcp7fZhYmQCzTcLnhVXdr4WRo/edit?usp=sharing")
+```
+
+```{r}
+
+vif.mer <- function (fit) {
+    ## adapted from rms::vif
+    v <- vcov(fit)
+    nam <- names(fixef(fit))
+
+    ## exclude intercepts
+    ns <- sum(1 * (nam == "Intercept" | nam == "(Intercept)"))
+    if (ns > 0) {
+        v <- v[-(1:ns), -(1:ns), drop = FALSE]
+        nam <- nam[-(1:ns)]
+    }
+    
+    d <- diag(v)^0.5
+    v <- diag(solve(v/(d %o% d)))
+    names(v) <- nam
+    v
+}
+
+```
+
+
+## Data Overview
+
+```{r}
+summary(bdta)
+
+# see number of observations per bee
+table(bdta$Bee.ID)
+
+# get number of unque bees
+length(table(bdta$Bee.ID))
+
+# get treatment orders
+trtOrders_loadedSecond <- sapply(X = unique(bdta$Bee.ID), FUN = function(x){
+     tmp = bdta[bdta$Bee.ID == x, c("Treatment.order", "Treatment")]
+     if("2_L" %in% paste(tmp[,1], tmp[,2], sep = "_")){
+          loadedSecond = TRUE
+     }
+     else loadedSecond = FALSE
+     return(loadedSecond)
+})
+
+table(trtOrders_loadedSecond)
+
+
+
+# visualize scatterplot
+car::scatterplotMatrix(bdta[, 4:11])
+```
+
+---
+Part I: How does carrying a load during flight affect bumblebees’?
+a.	How does load affect respiratory rate?
+b.	How does load affect wingbeat frequency?
+c.	How does load affect stroke amplitude?
+d.	How does load affect wing velocity?
+In the models, we'll account for differences in bee size and the order of the treatment
+---
+
+
+
+## Variance Inflation Factor and PCA
+
+```{r}
+# VIF  is high among the bee size predictors
+# note: this function is almost the same as car::vif
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + Mstarved + IT.Span + single.wing.area + (1|Bee.ID), data = bdta))
+
+car::scatterplotMatrix(bdta[, c("Mstarved", "IT.Span", "single.wing.area")])
+
+# principle components
+aa = prcomp(bdta[, c("Mstarved", "IT.Span", "single.wing.area")], center = TRUE, scale = TRUE)
+summary(aa) # 1st pc explains ~95% of the variance in the three measurements of size
+
+biplot(aa) # shows that all three size measurement are correlated
+
+# note, I changed the signs of the predictions so that higher PC1 values 
+# correspond to bigger bees
+p1 = -predict(aa)[,1] 
+
+# add PC1 scores to dataset
+bdta$size_pca1 = p1
+
+# show scatterplot matrix to see correlations among size predictors
+car::scatterplotMatrix(bdta[, c("Mstarved", "IT.Span", "single.wing.area", "size_pca1")])
+
+# check VIF one last time
+# VIF  is high among the bee size predictors
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + size_pca1 + (1|Bee.ID), data = bdta))
+```
+
+## Multilevel models
+
+```{r}
+# a few house-keeping issues to make models easier to read
+
+# convert trt order to factor
+bdta$Treatment.order <- as.factor(as.character(bdta$Treatment.order))
+
+# change reference level to unloaded
+bdta$Treatment <- factor(bdta$Treatment, levels = c("UL", "L"))
+```
+
+## Resp Rate
+
+```{r}
+# make a full model with all two-way interactions
+m1 <- lmer(av.resp..CO2.mL.hr. ~  (size_pca1 +  Treatment.order + Treatment)^2 + (1|Bee.ID), data = bdta)
+
+summary(m1)
+
+
+### LRT's for interactions
+m2.0 <- update(m1, .~. - Treatment.order:Treatment)
+
+anova(m1, m2.0) # likelihood ratio test for interaction of treatment order
+summary(m2.0)
+
+
+m2.1 <- update(m2.0,.~. - size_pca1:Treatment.order)
+anova(m2.0, m2.1)
+summary(m2.1)
+
+
+m2.2 <- update(m2.1, .~. - size_pca1:Treatment)
+anova(m2.1, m2.2) ## drop all interactions
+
+summary(m2.2)
+
+
+# renaming model to simplify later typing
+m2 <- m2.2
+
+##### LRTs for main effects
+## Treatment Order
+m3 <- update(m2, .~. - Treatment.order)
+anova(m2, m3, test = "Chi")
+
+# LRT for size
+m4 <- update(m2, .~. - size_pca1)
+anova(m2, m4)
+
+# LRT for Treatment (load)
+m5 <- update(m2, .~. - Treatment)
+anova(m2, m5)
+
+# summarize final model for paper
+summary(m2)
+
+# write output
+summary(m2)$coefficients  
+write.csv( summary(m2)$coefficients, file = "~/Desktop/RespCoefs.csv" )
+
+
+# diagnostics
+# qq plot
+qqnorm(resid(m2), main = "")
+qqline(resid(m2)) # good
+
+# residual plot
+plot(fitted(m2), resid(m2), xlab = "fitted", ylab = "residuals")
+abline(0,0)
+
+
+# QQPlot for group-level effects
+qqnorm(ranef(m2)$Bee.ID[[1]], main="Normal Q-Q plot for random effects")
+qqline(ranef(m2)$Bee.ID[[1]]) # looks good
+```
+
+
+## Wingbeat Freq
+
+```{r}
+# make a full model with all two-way interactions
+m1 <- lmer(wbf.aud. ~  (size_pca1 +  Treatment.order + Treatment)^2 + (1|Bee.ID), data = bdta)
+
+summary(m1)
+
+
+### LRT's for interactions
+m2.0 <- update(m1, .~. - size_pca1:Treatment )
+
+anova(m1, m2.0)
+summary(m2.0)
+
+
+m2.1 <- update(m2.0,.~. - size_pca1:Treatment.order)
+anova(m2.0, m2.1)
+summary(m2.1)
+
+
+m2.2 <- update(m2.1, .~. - Treatment.order:Treatment)
+anova(m2.1, m2.2) ## drop all interactions
+
+summary(m2.2)
+
+
+# renaming model to simplify later typing
+m2 <- m2.2
+
+##### LRTs for main effects
+## Treatment Order
+m3 <- update(m2, .~. - Treatment.order)
+anova(m2, m3, test = "Chi")
+
+# LRT for size
+m4 <- update(m2, .~. - size_pca1)
+anova(m2, m4)
+
+# LRT for Treatment (load)
+m5 <- update(m2, .~. - Treatment)
+anova(m2, m5)
+
+# summarize final model for paper
+summary(m2)
+
+# write output
+summary(m2)$coefficients  
+write.csv( summary(m2)$coefficients, file = "~/Desktop/FreqCoefs.csv" )
+
+
+# diagnostics
+# qq plot
+qqnorm(resid(m2), main = "")
+qqline(resid(m2)) # good
+
+# residual plot
+plot(fitted(m2), resid(m2), xlab = "fitted", ylab = "residuals")
+abline(0,0)
+
+
+# QQPlot for group-level effects
+qqnorm(ranef(m2)$Bee.ID[[1]], main="Normal Q-Q plot for random effects")
+qqline(ranef(m2)$Bee.ID[[1]]) # looks good
+
+```
+
+
+
+## Stroke Amplitude
+```{r}
+# make a full model with all two-way interactions
+m1 <- lmer(stroke.amplitude ~  (size_pca1 +  Treatment.order + Treatment)^2 + (1|Bee.ID), data = bdta)
+
+summary(m1)
+
+
+### LRT's for interactions
+m2.0 <- update(m1, .~. - Treatment.order:Treatment )
+
+anova(m1, m2.0)
+summary(m2.0)
+
+
+m2.1 <- update(m2.0,.~. - size_pca1:Treatment.order)
+anova(m2.0, m2.1)
+summary(m2.1)
+
+
+m2.2 <- update(m2.1, .~. - size_pca1:Treatment)
+anova(m2.1, m2.2) ## drop all interactions
+
+summary(m2.2)
+
+
+# renaming model to simplify later typing
+m2 <- m2.2
+
+##### LRTs for main effects
+## size
+m3 <- update(m2, .~. - size_pca1)
+anova(m2, m3, test = "Chi") # drop size_pca1
+summary(m3)
+
+# trt order
+m4 <- update(m3, .~. - Treatment.order)
+anova(m3, m4)
+
+# LRT for Treatment (load)
+m5 <- update(m3, .~. - Treatment)
+anova(m3, m5)
+
+# summarize final model for paper
+summary(m3)
+
+# write output
+summary(m3)$coefficients  
+write.csv( summary(m3)$coefficients, file = "~/Desktop/AmpCoefs.csv" )
+
+
+# diagnostics
+# qq plot
+qqnorm(resid(m3), main = "")
+qqline(resid(m3)) # ok
+
+# residual plot
+plot(fitted(m3), resid(m3), xlab = "fitted", ylab = "residuals")
+abline(0,0)
+
+
+# QQPlot for group-level effects
+qqnorm(ranef(m3)$Bee.ID[[1]], main="Normal Q-Q plot for random effects")
+qqline(ranef(m3)$Bee.ID[[1]]) # looks good
+```
+
+## Wing Velocity
+
+```{r}
+# make a full model with all two-way interactions
+m1 <- lmer(wing.velocity ~  (size_pca1 +  Treatment.order + Treatment)^2 + (1|Bee.ID), data = bdta)
+
+summary(m1)
+
+
+### LRT's for interactions
+m2.0 <- update(m1, .~. - Treatment.order:Treatment )
+
+anova(m1, m2.0)
+summary(m2.0)
+
+
+m2.1 <- update(m2.0,.~. - size_pca1:Treatment.order)
+anova(m2.0, m2.1)
+summary(m2.1)
+
+
+m2.2 <- update(m2.1, .~. - size_pca1:Treatment)
+anova(m2.1, m2.2) ## don't drop size:trt interaction
+
+
+# renaming model to simplify later typing
+m2 <- m2.1
+
+##### LRTs for main effects
+# trt order
+m3 <- update(m2, .~. - Treatment.order)
+anova(m2, m3, test = "Chi") # drop trt order
+summary(m3)
+
+
+# summarize final model for paper
+summary(m3)
+
+# write output
+summary(m3)$coefficients  
+write.csv( summary(m3)$coefficients, file = "~/Desktop/VelocCoefs.csv" )
+
+
+# diagnostics
+# qq plot
+qqnorm(resid(m3), main = "")
+qqline(resid(m3)) # good
+
+# residual plot
+plot(fitted(m3), resid(m3), xlab = "fitted", ylab = "residuals")
+abline(0,0)
+
+
+# QQPlot for group-level effects
+qqnorm(ranef(m3)$Bee.ID[[1]], main="Normal Q-Q plot for random effects")
+qqline(ranef(m3)$Bee.ID[[1]]) # looks good
+
+```
+
+##########################################################################
+##
+## Part II: Which flight measurements are most closely associated with 
+## respiratory rate in bees – wingbeat frequency, stroke amplitude, or 
+## wing velocity?
+##
+##########################################################################
+
+### Multilevel model approach to see the relatedness of the response variables
+- Wingbeat frequency
+- Stroke amplitude
+- Wing velocity
+- Resp. Rate
+
+
+
+```{r}
+# predicting avg resp rate, including stroke amplitude, wing velocity and wingbeat frequency
+# looks like we have to remove wing velocity
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ stroke.amplitude + wing.velocity + wbf.aud. + Treatment + Treatment.order + size_pca1 + (1|Bee.ID), data = bdta))
+
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ stroke.amplitude + wbf.aud. + Treatment + Treatment.order + size_pca1 + (1|Bee.ID), data = bdta)) # still worryingly high for treatment and stroke amplitude
+
+
+
+mm1 <- lmer(av.resp..CO2.mL.hr. ~ (stroke.amplitude + wbf.aud. + Treatment + Treatment.order + size_pca1)^2 + (1|Bee.ID), data = bdta)
+summary(mm1)  # warning says to rescale
+
+# rescale numeric predictors
+bdta_scaled = scale(bdta[, c("av.resp..CO2.mL.hr.", 
+                             "stroke.amplitude", 
+                             "wbf.aud.", 
+                             "size_pca1")], 
+                    center = TRUE, 
+                    scale = TRUE)
+colnames(bdta_scaled) <- paste0(colnames(bdta_scaled), "_scaled")
+bdta = cbind(bdta, bdta_scaled)
+
+mm1 <- lmer(av.resp..CO2.mL.hr. ~ (stroke.amplitude_scaled + wbf.aud._scaled + Treatment + Treatment.order + size_pca1_scaled)^2 + (1|Bee.ID), data = bdta)
+summary(mm1)
+
+# LRT's
+mm2 <- update(mm1, .~. - wbf.aud._scaled:size_pca1_scaled)
+anova(mm1, mm2)
+summary(mm2)
+
+mm3 <- update(mm2, .~. -Treatment.order:size_pca1_scaled)
+anova(mm3, mm2)
+summary(mm3)
+
+mm4 <- update(mm3, .~. - wbf.aud._scaled:Treatment.order)
+anova(mm3, mm4)
+summary(mm4)
+
+mm5 <- update(mm4, .~. - stroke.amplitude_scaled:wbf.aud._scaled)
+anova(mm4, mm5)
+summary(mm5)
+
+mm6 <- update(mm5, .~. - stroke.amplitude_scaled:Treatment.order)
+anova(mm5, mm6)
+summary(mm6)
+
+mm7 <- update(mm6, .~. - Treatment:Treatment.order)
+anova(mm6, mm7)
+summary(mm7)
+
+mm8 <- update(mm7, .~. - wbf.aud._scaled:Treatment)
+anova(mm8, mm7)
+summary(mm8)
+
+mm9 <- update(mm8, .~. - Treatment:size_pca1_scaled)
+anova(mm9, mm8)
+summary(mm9)
+
+mm10 <- update(mm9, .~. - stroke.amplitude_scaled:Treatment)
+anova(mm10, mm9)
+summary(mm10)
+
+mm11 <- update(mm10, .~. - stroke.amplitude_scaled:size_pca1_scaled)
+anova(mm10, mm11) # keep interaction
+
+## main effects
+mm12 <- update(mm10, .~. - Treatment.order)
+anova(mm10, mm12)
+summary(mm12)
+
+## test only main effects that aren't part of the interaction
+mm13 <- update(mm12, .~. -Treatment)
+anova(mm12, mm13) # trt is significant
+
+
+mm14 <- update(mm12, .~. - wbf.aud._scaled)
+anova(mm12, mm14) # wbf is significant
+
+mm15 <- update(mm12, .~. - stroke.amplitude_scaled:size_pca1_scaled)
+anova(mm12, mm15)
+
+
+summary(mm12)  # final model for paper
+
+
+# write output
+summary(mm12)$coefficients  
+write.csv( summary(mm12)$coefficients, file = "~/Desktop/resp_oth_Coefs.csv" )
+
+# diagnostics
+# qq plot
+qqnorm(resid(mm12), main = "")
+qqline(resid(mm12)) # good, but two outliers
+
+# residual plot
+plot(fitted(mm12), resid(mm12), xlab = "fitted", ylab = "residuals")
+abline(0,0)
+
+
+# QQPlot for group-level effects
+qqnorm(ranef(mm12)$Bee.ID[[1]], main="Normal Q-Q plot for random effects")
+qqline(ranef(mm12)$Bee.ID[[1]]) # looks good
+```
+
+This model is fundamentally different from the previous one.
+It's saying, when we account for differences in wingbeat freq, stroke amplitude, and bee size, we sill see an effect of treatment on metabolic rate.
+
+OR, we could say that holding all other variables constant, an increase in wingbeat frequency is associated with an increase in metabolic rate. 
+
+
+### REFREF: Analyze for load (or percent load)
+## Model using percent load
+```{r}
+# predicting avg resp rate, using load as a raw value (percent load)
+colnames(bdta)
+bdta$percentLoad <- bdta$load / bdta$Mstarved # load as a function as bodyweight
+hist(bdta$percentLoad, breaks = 20, freq = FALSE)
+lines(density(bdta$percentLoad)) # looks pretty bimodal
+```
+
+
+### Analyze total mass is associated with metabolic rate ? (REFREF)
+
+
