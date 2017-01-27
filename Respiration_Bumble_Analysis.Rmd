@@ -109,16 +109,22 @@ vif.mer <- function (fit) {
 # calculate percent load
 bdta$percLoad <- with(bdta, (Mstarved + load) / Mstarved)
 
+# calculate total mass
+bdta$totalMass <- with(bdta, Mstarved + load)
+
 summary(bdta)
 
 ggplot(bdta, aes(x = percLoad, fill = Treatment)) + 
-     geom_histogram()
-
-
-hist(bdta$percLoad, breaks = 20) # not much overlap....
+     geom_histogram()  # not much overlap....
 
 ```
 
+
+```{r}
+# visualize % load vs total mass
+ggplot(bdta, aes(x = percLoad, y = Mstarved + load)) + 
+     geom_point()
+```
 
 ```{r}
 # see number of observations per bee
@@ -142,7 +148,7 @@ table(trtOrders_loadedSecond)
 
 
 # visualize scatterplot
-car::scatterplotMatrix(bdta[, 4:12])
+car::scatterplotMatrix(bdta[, 4:13])
 ```
 
 ---
@@ -161,7 +167,7 @@ In the models, we'll account for differences in bee size and the order of the tr
 ```{r}
 # VIF  is high among the bee size predictors
 # note: this function is almost the same as car::vif
-vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + Mstarved + IT.Span + single.wing.area + percLoad +  (1|Bee.ID), data = bdta))
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + Mstarved + IT.Span + totalMass +  single.wing.area + percLoad +  (1|Bee.ID), data = bdta))
 
 car::scatterplotMatrix(bdta[, c("Mstarved", "IT.Span", "single.wing.area")])
 
@@ -183,11 +189,16 @@ car::scatterplotMatrix(bdta[, c("Mstarved", "IT.Span", "single.wing.area", "size
 
 # check VIF one last time
 # VIF  is high among the bee size predictors
-vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + size_pca1 + percLoad + (1|Bee.ID), data = bdta))
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + size_pca1 + percLoad + totalMass +  (1|Bee.ID), data = bdta))
 
 
 # remove treatment 
-vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + size_pca1 + percLoad + (1|Bee.ID), data = bdta))
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment.order + size_pca1 + percLoad + totalMass + (1|Bee.ID), data = bdta))
+
+
+
+# remove total mass 
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment.order + size_pca1 + percLoad +  (1|Bee.ID), data = bdta))
 ```
 
 ## Multilevel models
