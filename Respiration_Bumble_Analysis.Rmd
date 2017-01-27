@@ -5,6 +5,41 @@ date: "11/4/2016, Update: 12/13/2016, Update: 27 Jan 2017"
 output: html_document
 ---
 
+
+---
+#### Update 27 Jan 2017
+wingbeat freq = size
+Met rate  = mass carrying
+amplitude = percent loading
+
+
+Susie’s (hypotheses):
+lm( frequency ~ ITspan  +  trt order)
+
+lm( metabolism ~ total mass)
+
+lm( stroke amplitude ~ %load  + trt) (those are probably the same thing)
+
+
+* Redo the model with %load and/or total mass (probably the best predictor of metabolism)
+* Check VIF
+* Think about how to make figures
+* How heavy the bee is loaded overall, affects how much the amplitude and frequency change
+
+- Questions to look into:
+** A really heavy loaded bee will have a smaller change in metabolism vs. light bee
+** Suggests a non-linear relationship or random slopes that depend on bee size — the cost for additional weight goes down as you get heavier loaded. — not the case for the change in amplitude  (change in load vs. change in amplitude is linear) — not the case for metabolism or wingbeat frequency.
+
+** Hypotheses: 
+1. Wingbeat freq moves around for a number of reasons (tired, cold, added mass)
+2. Stroke amplitude rescues wingbeat frequency
+3. As you get really close to your max, adding more weight doesn’t seem to cost as much.
+
+
+
+
+---
+
 Analyses of respirometry data:
 
 1.	How does carrying a load during flight affect bumblebees’?
@@ -17,10 +52,15 @@ Analyses of respirometry data:
 
 ---
 
+### Setup
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = "~/Dropbox/dataAnalysisForOthers/SusieBeeWingAndResp/BeeResp_Oct2016/")
+```
+
 Install required packages and read in data
 Define custom function for evaluating VIF with multilevel models
 
-```{r}
+```{r, message=FALSE, warning = FALSE}
 ipak <- function(pkg){
      new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
      if(length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
@@ -30,10 +70,15 @@ ipak <- function(pkg){
 packages <- c('ggplot2', 'car', 'lme4', 'gsheet', "MASS")
 ipak(packages)
 
+theme_set(theme_bw())
+
 # read in data -- google sheet called "Bumble mumble grumble"
 bdta <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1GUUoFq41Ep3sJNFXiyMcp7fZhYmQCzTcLnhVXdr4WRo/edit?usp=sharing")
 ```
 
+
+#### Function for calculating vif for lmer
+(used later)
 ```{r}
 
 vif.mer <- function (fit) {
@@ -60,8 +105,22 @@ vif.mer <- function (fit) {
 ## Data Overview
 
 ```{r}
+
+# calculate percent load
+bdta$percLoad <- with(bdta, (Mstarved + load) / Mstarved)
+
 summary(bdta)
 
+ggplot(bdta, aes(x = percLoad, fill = Treatment)) + 
+     geom_histogram()
+
+
+hist(bdta$percLoad, breaks = 20) # not much overlap....
+
+```
+
+
+```{r}
 # see number of observations per bee
 table(bdta$Bee.ID)
 
@@ -83,7 +142,7 @@ table(trtOrders_loadedSecond)
 
 
 # visualize scatterplot
-car::scatterplotMatrix(bdta[, 4:11])
+car::scatterplotMatrix(bdta[, 4:12])
 ```
 
 ---
@@ -102,7 +161,7 @@ In the models, we'll account for differences in bee size and the order of the tr
 ```{r}
 # VIF  is high among the bee size predictors
 # note: this function is almost the same as car::vif
-vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + Mstarved + IT.Span + single.wing.area + (1|Bee.ID), data = bdta))
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + Mstarved + IT.Span + single.wing.area + percLoad +  (1|Bee.ID), data = bdta))
 
 car::scatterplotMatrix(bdta[, c("Mstarved", "IT.Span", "single.wing.area")])
 
@@ -120,11 +179,15 @@ p1 = -predict(aa)[,1]
 bdta$size_pca1 = p1
 
 # show scatterplot matrix to see correlations among size predictors
-car::scatterplotMatrix(bdta[, c("Mstarved", "IT.Span", "single.wing.area", "size_pca1")])
+car::scatterplotMatrix(bdta[, c("Mstarved", "IT.Span", "single.wing.area", "size_pca1", "percLoad")])
 
 # check VIF one last time
 # VIF  is high among the bee size predictors
-vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + size_pca1 + (1|Bee.ID), data = bdta))
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + size_pca1 + percLoad + (1|Bee.ID), data = bdta))
+
+
+# remove treatment 
+vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + size_pca1 + percLoad + (1|Bee.ID), data = bdta))
 ```
 
 ## Multilevel models
