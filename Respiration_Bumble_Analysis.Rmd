@@ -12,7 +12,8 @@ output: html_document
 
 #### Summary of findings:
 1. % load and total mass are too collinear to include in the same model.
-2. 
+2. Treatment and %load are too collinear to include in the same model.
+
 
 
 
@@ -165,10 +166,10 @@ car::scatterplotMatrix(bdta[, 4:13])
 
 ---
 Part I: How does carrying a load during flight affect bumblebees’?
-a.	How does load affect respiratory rate?
-b.	How does load affect wingbeat frequency?
-c.	How does load affect stroke amplitude?
-d.	How does load affect wing velocity?
+a.	How does %load affect respiratory rate?
+b.	How does %load affect wingbeat frequency?
+c.	How does %load affect stroke amplitude?
+d.	How does %load affect wing velocity?
 In the models, we'll account for differences in bee size and the order of the treatment
 ---
 
@@ -199,7 +200,7 @@ bdta$size_pca1 = p1
 # show scatterplot matrix to see correlations among size predictors
 car::scatterplotMatrix(bdta[, c("Mstarved", "IT.Span", "single.wing.area", "size_pca1", "percLoad")])
 
-# check VIF one last time
+# check VIF one more time
 # VIF  is high among the bee size predictors
 vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + size_pca1 + percLoad + totalMass +  (1|Bee.ID), data = bdta))
 
