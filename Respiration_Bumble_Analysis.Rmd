@@ -7,7 +7,16 @@ output: html_document
 
 
 ---
+
 #### Update 27 Jan 2017
+
+#### Summary of findings:
+1. % load and total mass are too collinear to include in the same model.
+2. 
+
+
+
+
 wingbeat freq = size
 Met rate  = mass carrying
 amplitude = percent loading
@@ -80,7 +89,6 @@ bdta <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1GUUoFq41Ep3sJNFXiyMc
 #### Function for calculating vif for lmer
 (used later)
 ```{r}
-
 vif.mer <- function (fit) {
     ## adapted from rms::vif
     v <- vcov(fit)
@@ -115,7 +123,10 @@ bdta$totalMass <- with(bdta, Mstarved + load)
 summary(bdta)
 
 ggplot(bdta, aes(x = percLoad, fill = Treatment)) + 
-     geom_histogram()  # not much overlap....
+     geom_histogram()  
+# seems like percent load and trt are very related
+
+
 
 ```
 
@@ -124,11 +135,12 @@ ggplot(bdta, aes(x = percLoad, fill = Treatment)) +
 # visualize % load vs total mass
 ggplot(bdta, aes(x = percLoad, y = Mstarved + load)) + 
      geom_point()
+# seem to be strongly associated
 ```
 
 ```{r}
 # see number of observations per bee
-table(bdta$Bee.ID)
+table(bdta$Bee.ID) # each bee has two observations
 
 # get number of unque bees
 length(table(bdta$Bee.ID))
@@ -194,8 +206,7 @@ vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + size_pca1 + per
 
 # remove treatment 
 vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment.order + size_pca1 + percLoad + totalMass + (1|Bee.ID), data = bdta))
-
-
+# looks like we cannot have total mass and percentLoad in the same model, according to VIF
 
 # remove total mass 
 vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment.order + size_pca1 + percLoad +  (1|Bee.ID), data = bdta))
