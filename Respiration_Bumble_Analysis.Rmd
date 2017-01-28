@@ -86,7 +86,7 @@ ipak <- function(pkg){
      sapply(pkg, require, character.only = TRUE)
 }
 
-packages <- c('ggplot2', 'car', 'lme4', 'gsheet', "MASS")
+packages <- c('ggplot2', 'car', 'lme4', 'gsheet', "MASS", 'influence.ME')
 ipak(packages)
 
 theme_set(theme_bw())
@@ -125,7 +125,12 @@ vif.mer <- function (fit) {
 ```{r}
 
 # calculate percent load
+# calculated as total mass / starved mass
 bdta$percLoad <- with(bdta, (Mstarved + load) / Mstarved)
+
+# center percent load
+bdta$percLoad <- scale(bdta$percLoad, center = TRUE, scale = FALSE)
+hist(bdta$percLoad)
 
 # calculate total mass
 bdta$totalMass <- with(bdta, Mstarved + load)
@@ -233,7 +238,7 @@ bdta$Treatment <- factor(bdta$Treatment, levels = c("UL", "L"))
 
 ## Resp Rate
 
-```{r}
+```{r, cache = TRUE}
 # make a full model with all two-way interactions
 m1 <- lmer(av.resp..CO2.mL.hr. ~  (size_pca1 +  Treatment.order + percLoad)^2 + (1|Bee.ID), data = bdta)
 
@@ -277,6 +282,8 @@ anova(m3, m5) # keep percent load
 # summarize final model for paper
 summary(m3)
 
+
+
 # write output
 summary(m3)$coefficients  
 write.csv( summary(m3)$coefficients, file = "RespCoefs_percLoad.csv" )
@@ -291,6 +298,9 @@ qqline(resid(m3)) # good
 plot(fitted(m3), resid(m3), xlab = "fitted", ylab = "residuals")
 abline(0,0)
 
+# check cook's distance -- should be less than 1, so we're good
+infl <- influence(m3, obs = TRUE)
+plot(infl, which = 'cook')
 
 # QQPlot for group-level effects
 qqnorm(ranef(m3)$Bee.ID[[1]], main="Normal Q-Q plot for random effects")
@@ -299,7 +309,7 @@ qqline(ranef(m3)$Bee.ID[[1]]) # looks good
 
 ## Wingbeat Freq
 
-```{r}
+```{r, cache = TRUE}
 # make a full model with all two-way interactions
 m1 <- lmer(wbf.aud. ~  (size_pca1 +  Treatment.order + percLoad)^2 + (1|Bee.ID), data = bdta)
 
@@ -330,15 +340,15 @@ m2 <- m2.2
 ##### LRTs for main effects
 ## Treatment Order
 m3 <- update(m2, .~. - Treatment.order)
-anova(m2, m3, test = "Chi")
+anova(m2, m3, test = "Chi") # keep treatment order
 
 # LRT for size
 m4 <- update(m2, .~. - size_pca1)
-anova(m2, m4)
+anova(m2, m4) # keep size_pca1
 
 # LRT for Treatment (load)
 m5 <- update(m2, .~. - percLoad)
-anova(m2, m5)
+anova(m2, m5) # keep percLoad
 
 # summarize final model for paper
 summary(m2)
@@ -353,9 +363,14 @@ write.csv( summary(m2)$coefficients, file = "FreqCoefs_percLoad.csv" )
 qqnorm(resid(m2), main = "")
 qqline(resid(m2)) # good
 
+# check influence
+plot(influence(m2, obs = TRUE ), which = 'cook')
+
 # residual plot
-plot(fitted(m2), resid(m2), xlab = "fitted", ylab = "residuals")
+plot(fitted(m2), residuals(m2, "deviance"), xlab = "fitted", ylab = "residuals")
 abline(0,0)
+
+
 
 
 # QQPlot for group-level effects
@@ -465,6 +480,7 @@ anova(m2, m3, test = "Chi") # drop trt order
 summary(m3)
 
 
+
 # summarize final model for paper
 summary(m3)
 
@@ -477,6 +493,9 @@ write.csv( summary(m3)$coefficients, file = "VelocCoefs_percLoad.csv" )
 # qq plot
 qqnorm(resid(m3), main = "")
 qqline(resid(m3)) # good
+
+# cook's distance
+plot(influence(m3, obs = TRUE), which = 'cook')
 
 # residual plot
 plot(fitted(m3), resid(m3), xlab = "fitted", ylab = "residuals")
