@@ -8,6 +8,15 @@
 # .csv (data) files
 *.csv
 
+# knitr and R markdown default cache directories
+/*_cache/
+/cache/
+
+# r markdown files
+/*_files/
+
+
+
 # R project file
 *.Rproj
 
