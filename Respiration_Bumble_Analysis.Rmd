@@ -20,6 +20,8 @@ output: html_document
 ## TODO: 
 Make better notes
 double check visualizations
+# compare  effect size
+Compare sizepca^2
 
 #### Differences between model with Treatment vs. model with % load
 - Treatment order is not a significant predictor of wingbeat frequency in the model with percent load (though it is very close, p ~ 0.07)
@@ -161,6 +163,9 @@ summary(bdta)
 
 ggplot(bdta, aes(x = percLoad, fill = Treatment)) + 
      geom_histogram()  
+
+ggplot(bdta, aes(x = totalMass, fill = Treatment)) + 
+     geom_histogram()  
 # seems like percent load and trt are very related
 ```
 
@@ -225,6 +230,8 @@ car::scatterplotMatrix(bdta[, c("Mstarved", "IT.Span", "single.wing.area", "size
 # check VIF one more time
 # VIF  is high among the bee size predictors
 vif.mer(lmer(av.resp..CO2.mL.hr. ~ Treatment + Treatment.order + size_pc1 + percLoad + totalMass +  (1|Bee.ID), data = bdta))
+
+vif.mer(lmer(av.resp..CO2.mL.hr. ~Treatment +  Treatment.order + size_pc1 + totalMass +  (1|Bee.ID), data = bdta))
 
 
 # remove treatment 
@@ -307,6 +314,11 @@ summary(m3)
 # write output
 summary(m3)$coefficients  
 write.csv( summary(m3)$coefficients, file = "RespCoefs_percLoad.csv" )
+
+library(effects)
+plot(effect(term = 'percLoad_cent', mod = m3, partial.residuals=TRUE))
+
+
 ```
 
 ### resp rate diagnostics
