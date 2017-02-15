@@ -1,0 +1,135 @@
+---
+title: "MeanPercLoadAnalysis"
+author: "Callin Switzer"
+date: "2/3/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir ='/Users/callinswitzer/Documents/GitRepos/BeeRespiration/')
+```
+
+
+```{r}
+
+ipak <- function(pkg){
+     new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+     if(length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+     sapply(pkg, require, character.only = TRUE)
+}
+
+packages <- c('ggplot2', 'car', 'lme4', 'gsheet', "MASS", 'reshape2',
+              'influence.ME', 'sjPlot', "effects", 'visreg')
+ipak(packages)
+
+URL = 'https://docs.google.com/spreadsheets/d/1NcbSiwayozIXYvPOg7VMBFpC7xTWyP4KgTNItYxzAAA/edit?usp=sharing'
+bdta2 <- as.data.frame(gsheet2tbl(URL))
+
+colnames(bdta2)[2] <- 'Treatment Order'
+
+```
+
+
+
+# check to see if this data matches the other data
+Reformat data to show change in behavior
+```{r}
+
+# read in data -- google sheet called "Bumble mumble grumble"
+bdta_long <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1GUUoFq41Ep3sJNFXiyMcp7fZhYmQCzTcLnhVXdr4WRo/edit?usp=sharing")
+
+bdta$`Treatment order`
+colnames(bdta_long)
+data.frame(colnames(bdta_long))
+
+colnames(bdta_long)[c(2, 5:6, 8:13)]
+
+# convert from long to wide
+varb = "Treatment order"
+newDF <- data.frame()
+for(varb in colnames(bdta_long)[c(2, 5:6, 8:13)]){
+     data_wide <- dcast(bdta_long, `Bee ID` + Mstarved + `single wing area`  + `IT Span` ~ 
+                             Treatment, value.var=c(varb))
+     colnames(data_wide)[5:6] = paste(varb, colnames(data_wide)[5:6], sep = "_")
+     if(varb == colnames(bdta_long)[2]){
+       newDF <- data_wide   
+     }
+     
+     else newDF <- merge(newDF, data_wide, all.y = TRUE)    
+}
+
+head(newDF)
+```
+
+```{r}
+colnames(newDF)
+chdf <- with(newDF, {
+     data.frame(`Bee ID`,`Treatment order_L`,  Mstarved, percLoad_high = (MF_L)/Mstarved - 1, 
+                percLoad_low = MF_UL/Mstarved - 1)
+})
+chdf <- within(chdf, {
+     meanPercLoad = (percLoad_high + percLoad_low) / 2
+})
+
+chdf <- within(chdf, {
+     changeResp = newDF$`av resp (CO2 mL/hr)_L` - newDF$`av resp (CO2 mL/hr)_UL` 
+     changeFreq = newDF$`wbf(aud)_L` - newDF$`wbf(aud)_UL`
+})
+
+head(chdf)
+head(as.data.frame(bdta2))
+
+# compare differences
+plot(chdf$percLoad_low, bdta2$`percent load (low load)`)
+data.frame(chdf$Bee.ID, abs(chdf$percLoad_low - bdta2$`percent load (low load)`) > 0.01)
+abline(0,1)
+plot(x = chdf$percLoad_high, y = bdta2$`percent loading (high load)`)
+abline(0,1)
+
+plot(chdf$Mstarved, chdf$percLoad_high)
+plot(chdf$Mstarved, chdf$percLoad_low)
+
+as.data.frame(bdta_long[bdta_long$`Bee ID` == "E32",])
+
+chdf[chdf$Bee.ID == "E32",]
+
+# remove outlier for now
+# REFREF
+chdf <- chdf[chdf$Bee.ID != "E32",]
+
+```
+
+
+```{r}
+colnames(chdf)
+plot(chdf$changeResp ~ chdf$percLoad_high)
+
+m1 <- lm(chdf$changeResp ~ chdf$percLoad_high)
+summary(m1)
+abline(m1)
+
+
+plot(chdf$changeResp ~ chdf$percLoad_low)
+
+m2 <- lm(chdf$changeResp ~ chdf$percLoad_low)
+summary(m2)
+abline(m2)
+
+plot(chdf$percLoad_high ~ chdf$percLoad_low)
+abline(lm(chdf$percLoad_high ~ chdf$percLoad_low))
+### HERE
+```
+
+
+
+```{r, eval = FALSe}
+head(chdf)
+chdf <- chdf[order(chdf$`Bee ID`), ]
+chdf$percLoad_high = (chdf$Mstarved + chdf$chg_load) / chdf$Mstarved
+head(as.data.frame(bdta2))
+
+colnames(bdta2)
+# visualize data to double check it
+car::scatterplotMatrix(chdf[,3:(ncol(chdf) -1)])
+```

@@ -1,0 +1,145 @@
+---
+title: "BeeResp_15Feb"
+author: "Callin Switzer"
+date: "February 15, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir ='/Users/callinswitzer/Documents/GitRepos/BeeRespiration/')
+```
+
+### Summary:
+Two avenues of analysis:
+
+1.  First we see how $\Delta$load affects $\Delta$ArcLength and $\Delta$frequency, accounting for bee size and treatment order
+2.  We check to see how $\Delta$frequency and $\Delta$ArcLength are associated with $\Delta$MetabolicRate, while accounting for $\Delta$load
+
+### Measured variables:
+
+- Bee ID: Name given to an invididual (subscript in equations)
+- Order: This is the trial number per individual, either 1 or 2
+- Treatment: Either light or heavy- H is with both nectar and external load, L is just nectar load (subscript in equations)
+- MStarved: The empty mass of the bee after being starved for days, until it no longer buzzes when prodded in grams
+- M2: Total mass of the bee and load at beginning of trial in grams
+- MF: The mass of the bee and load at end of trial in grams
+- ITspan=intertegular span in m
+- S=area of both forewings in $m^2$
+- MetR= Metabolic rate in mL $CO_2$ $hr^{-1}$
+- Freq= wing beat frequency in Hz
+- Amp= stroke amplitude of forewing in degrees
+- L= length of forewing from wing base to tip in m
+ 
+ 
+### Calculated variables:
+- MT: Mtrial, total mass, =(M2+MF)/2 = the average mass of the course of the trial
+- Load= Mtrial- Mstarved
+- Perload=  Percent load, %load (Load/Mstarved)x100
+- ArcL= (.75 $\cdotp$ wlength) (Amp ($\pi$/180)) 	pi/180 converts to radians
+- U= wing velocity, arcL$\cdotp$ frq $\cdotp$ 2   (the 2 comes from the fact that frequency consists of both an up and down stroke, vel=∆x/∆t, ∆x=arclength, ∆t=1/(freg $\cdotp$ 2)
+- Freqsq=$Freq^2$
+- ArcLsq=$ArcL^2$
+- Force=$U^2 \cdotp S$
+
+</pre>
+
+
+## Install packages and read data
+
+```{r}
+ipak <- function(pkg){
+     new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+     if(length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+     sapply(pkg, require, character.only = TRUE)
+}
+
+packages <- c('ggplot2', 'car', 'lme4', 'gsheet', "MASS",'reshape2', 
+              'influence.ME', 'sjPlot', "effects", 'visreg')
+ipak(packages)
+
+# read in data -- google sheet called "Final Bee Resp Data"
+url = 'https://docs.google.com/spreadsheets/d/1wT-QxSJJElhhJcIXlg2hDpFKHbLyFGuqNNj2iYvA8Vo/edit?usp=sharing'
+bdta <- data.frame(gsheet2tbl(url))
+```
+
+
+# Calculate variables
+```{r}
+
+colnames(bdta)
+bdta <- within(bdta, {
+     MT = (M2 + MF)/2
+     load = MT / Mstarved
+     perLoad = load / Mstarved * 100
+     arcL = (0.75 * L) * (amp * (pi / 180))
+     U = arcL * freq * 2
+     freq2 = freq^2
+     arcL2 = arcL^2
+     frce = U^2 * S
+     
+     # convert to factor variables
+     order = as.factor(as.character(order))
+     Treatment = as.factor(as.character(Treatment))
+     BeeID = as.factor(as.character(BeeID))
+})
+
+```
+
+
+### Create a new dataframe that calculates the changes for each bee
+```{r}
+colnames(bdta)
+# convert from long to wide
+varb = "M2"
+newDF <- data.frame()
+colsTocalc = c("order", "M2", "MF", "MetR", "freq", "amp", "load", "MT", "perLoad", "frce", "arcL2", "freq2", "U", "arcL")
+for(varb in colsTocalc){
+     data_wide <- dcast(bdta, BeeID + Mstarved + S + Itspan + L ~ 
+                             Treatment, value.var=c(varb))
+     colnames(data_wide)[6:7] = paste(varb, colnames(data_wide)[6:7], sep = "_")
+     if(varb == colsTocalc[1]){
+       newDF <- data_wide   
+     }
+     else newDF <- merge(newDF, data_wide, all.y = TRUE)    
+}
+
+head(newDF)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Session Info
+```{r}
+sessionInfo()
+
+Sys.time()
+
+```
