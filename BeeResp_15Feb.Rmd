@@ -47,7 +47,7 @@ Two avenues of analysis:
 
 ## Install packages and read data
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 ipak <- function(pkg){
      new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
      if(length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
@@ -70,7 +70,7 @@ bdta <- data.frame(gsheet2tbl(url))
 colnames(bdta)
 bdta <- within(bdta, {
      MT = (M2 + MF)/2
-     load = MT / Mstarved
+     load = MT - Mstarved
      perLoad = load / Mstarved * 100
      arcL = (0.75 * L) * (amp * (pi / 180))
      U = arcL * freq * 2
@@ -108,6 +108,38 @@ head(newDF)
 
 ```
 
+
+### Calculate $\Delta$ variables
+
+```{r}
+
+newDF <- within(newDF, {
+     deltaPercLoad = perLoad_H - perLoad_L
+     avgPercLoad = (perLoad_H + perLoad_L) / 2
+     deltaMetR = MetR_H - MetR_L
+     deltaFrq2 = freq2_H - freq2_L
+     deltaArcL2 = arcL2_H - arcL2_L
+     deltaFreq2Perc = deltaFrq2 / deltaPercLoad
+     deltaLoad = load_H - load_L
+})
+
+
+# compare with Susie's calculations
+
+
+
+b2 <- read.csv("~/Desktop/b2.csv")
+b2 <- b2[!is.na(b2$deltaperload), ]
+b2 <- b2[order(b2$BeeID, b2$Treatment), ]
+
+plot(b2$AverageperLoad, newDF$avgPercLoad)
+abline(0,1)
+
+plot(b2$deltaload, newDF$deltaLoad)
+
+
+
+```
 
 
 

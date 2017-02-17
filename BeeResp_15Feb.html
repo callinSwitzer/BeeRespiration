@@ -165,7 +165,105 @@ $(document).ready(function () {
 </div>
 <div id="install-packages-and-read-data" class="section level2">
 <h2>Install packages and read data</h2>
-<pre class="r"><code>url = 'https://docs.google.com/spreadsheets/d/1wT-QxSJJElhhJcIXlg2hDpFKHbLyFGuqNNj2iYvA8Vo/edit?usp=sharing'</code></pre>
+<pre class="r"><code>ipak &lt;- function(pkg){
+     new.pkg &lt;- pkg[!(pkg %in% installed.packages()[, &quot;Package&quot;])]
+     if(length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+     sapply(pkg, require, character.only = TRUE)
+}
+
+packages &lt;- c('ggplot2', 'car', 'lme4', 'gsheet', &quot;MASS&quot;,'reshape2', 
+              'influence.ME', 'sjPlot', &quot;effects&quot;, 'visreg')
+ipak(packages)</code></pre>
+<pre><code>##      ggplot2          car         lme4       gsheet         MASS 
+##         TRUE         TRUE         TRUE         TRUE         TRUE 
+##     reshape2 influence.ME       sjPlot      effects       visreg 
+##         TRUE         TRUE         TRUE         TRUE         TRUE</code></pre>
+<pre class="r"><code># read in data -- google sheet called &quot;Final Bee Resp Data&quot;
+url = 'https://docs.google.com/spreadsheets/d/1wT-QxSJJElhhJcIXlg2hDpFKHbLyFGuqNNj2iYvA8Vo/edit?usp=sharing'
+bdta &lt;- data.frame(gsheet2tbl(url))</code></pre>
+</div>
+<div id="calculate-variables" class="section level1">
+<h1>Calculate variables</h1>
+<pre class="r"><code>colnames(bdta)</code></pre>
+<pre><code>##  [1] &quot;BeeID&quot;     &quot;order&quot;     &quot;Treatment&quot; &quot;Mstarved&quot;  &quot;M2&quot;       
+##  [6] &quot;MF&quot;        &quot;Itspan&quot;    &quot;S&quot;         &quot;MetR&quot;      &quot;freq&quot;     
+## [11] &quot;amp&quot;       &quot;L&quot;</code></pre>
+<pre class="r"><code>bdta &lt;- within(bdta, {
+     MT = (M2 + MF)/2
+     load = MT / Mstarved
+     perLoad = load / Mstarved * 100
+     arcL = (0.75 * L) * (amp * (pi / 180))
+     U = arcL * freq * 2
+     freq2 = freq^2
+     arcL2 = arcL^2
+     frce = U^2 * S
+     
+     # convert to factor variables
+     order = as.factor(as.character(order))
+     Treatment = as.factor(as.character(Treatment))
+     BeeID = as.factor(as.character(BeeID))
+})</code></pre>
+<div id="create-a-new-dataframe-that-calculates-the-changes-for-each-bee" class="section level3">
+<h3>Create a new dataframe that calculates the changes for each bee</h3>
+<pre class="r"><code>colnames(bdta)</code></pre>
+<pre><code>##  [1] &quot;BeeID&quot;     &quot;order&quot;     &quot;Treatment&quot; &quot;Mstarved&quot;  &quot;M2&quot;       
+##  [6] &quot;MF&quot;        &quot;Itspan&quot;    &quot;S&quot;         &quot;MetR&quot;      &quot;freq&quot;     
+## [11] &quot;amp&quot;       &quot;L&quot;         &quot;frce&quot;      &quot;arcL2&quot;     &quot;freq2&quot;    
+## [16] &quot;U&quot;         &quot;arcL&quot;      &quot;perLoad&quot;   &quot;load&quot;      &quot;MT&quot;</code></pre>
+<pre class="r"><code># convert from long to wide
+varb = &quot;M2&quot;
+newDF &lt;- data.frame()
+colsTocalc = c(&quot;order&quot;, &quot;M2&quot;, &quot;MF&quot;, &quot;MetR&quot;, &quot;freq&quot;, &quot;amp&quot;, &quot;load&quot;, &quot;MT&quot;, &quot;perLoad&quot;, &quot;frce&quot;, &quot;arcL2&quot;, &quot;freq2&quot;, &quot;U&quot;, &quot;arcL&quot;)
+for(varb in colsTocalc){
+     data_wide &lt;- dcast(bdta, BeeID + Mstarved + S + Itspan + L ~ 
+                             Treatment, value.var=c(varb))
+     colnames(data_wide)[6:7] = paste(varb, colnames(data_wide)[6:7], sep = &quot;_&quot;)
+     if(varb == colsTocalc[1]){
+       newDF &lt;- data_wide   
+     }
+     else newDF &lt;- merge(newDF, data_wide, all.y = TRUE)    
+}
+
+head(newDF)</code></pre>
+<pre><code>##   BeeID Mstarved        S  Itspan          L order_H order_L   M2_H   M2_L
+## 1   E01   0.1577 6.46e-05 0.00464 0.01116843       2       1 0.2634 0.1895
+## 2   E03   0.1732 6.92e-05 0.00487 0.01144364       1       2 0.3106 0.2105
+## 3   E05   0.1755 7.06e-05 0.00497 0.01168730       2       1 0.2776 0.2006
+## 4   E09   0.1135 4.88e-05 0.00440 0.00986884       1       2 0.2282 0.1425
+## 5   E10   0.1269 5.91e-05 0.00462 0.01060036       1       2 0.2166 0.1460
+## 6   E11   0.1350 5.88e-05 0.00464 0.01070018       1       2 0.2223 0.1599
+##     MF_H   MF_L   MetR_H    MetR_L   freq_H   freq_L    amp_H     amp_L
+## 1 0.2559 0.1812 12.54241 10.393483 186.9973 179.3308 128.7145 111.49875
+## 2 0.3079 0.2023 11.78387  9.214622 174.9374 167.8412 144.7784 119.98953
+## 3 0.2742 0.1975 12.20102  8.981412 178.8896 166.2385 125.6778 116.22053
+## 4 0.2084 0.1390  9.47114  7.581104 191.8348 190.3535 139.3246 103.30703
+## 5 0.2099 0.1422 11.03371  7.159840 186.1762 169.5451 128.8257  96.88003
+## 6 0.2179 0.1579 10.23580  6.806696 183.0259 168.2223 128.7916 116.18262
+##     load_H   load_L    MT_H    MT_L perLoad_H perLoad_L      frce_H
+## 1 1.646481 1.175333 0.25965 0.18535 1044.0588  745.2967 0.003199482
+## 2 1.785508 1.191686 0.30925 0.20640 1030.8938  688.0404 0.003984230
+## 3 1.572080 1.134188 0.27590 0.19905  895.7719  646.2610 0.003340857
+## 4 1.923348 1.240088 0.21830 0.14075 1694.5798 1092.5886 0.002327019
+## 5 1.680457 1.135540 0.21325 0.14410 1324.2372  894.8304 0.002618299
+## 6 1.630370 1.177037 0.22010 0.15890 1207.6818  871.8793 0.002563877
+##        frce_L      arcL2_H      arcL2_L  freq2_H  freq2_L      U_H
+## 1 0.002208025 0.0003540922 0.0002657061 34967.99 32159.55 7.037583
+## 2 0.002519159 0.0004703414 0.0003230668 30603.08 28170.67 7.587858
+## 3 0.002467172 0.0003696773 0.0003161342 32001.50 27635.24 6.879020
+## 4 0.001259710 0.0003239404 0.0001781022 36800.61 36234.44 6.905419
+## 5 0.001228018 0.0003195386 0.0001807120 34661.58 28745.53 6.656039
+## 6 0.001762569 0.0003254128 0.0002648146 33498.49 28298.73 6.603283
+##        U_L     arcL_H     arcL_L
+## 1 5.846363 0.01881734 0.01630050
+## 2 6.033576 0.02168736 0.01797406
+## 3 5.911496 0.01922699 0.01778016
+## 4 5.080722 0.01799834 0.01334549
+## 5 4.558361 0.01787564 0.01344292
+## 6 5.475004 0.01803920 0.01627313</code></pre>
+</div>
+<div id="calculate-delta-variables" class="section level3">
+<h3>Calculate <span class="math inline">\(\Delta\)</span> variables</h3>
+</div>
 </div>
 <div id="session-info" class="section level1">
 <h1>Session Info</h1>
@@ -180,13 +278,39 @@ $(document).ready(function () {
 ## attached base packages:
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
+## other attached packages:
+##  [1] visreg_2.3-0       effects_3.1-2      sjPlot_2.2.1      
+##  [4] influence.ME_0.9-8 reshape2_1.4.2     MASS_7.3-45       
+##  [7] gsheet_0.4.2       lme4_1.1-12        Matrix_1.2-8      
+## [10] car_2.1-4          ggplot2_2.2.1     
+## 
 ## loaded via a namespace (and not attached):
-##  [1] backports_1.0.5 magrittr_1.5    rprojroot_1.2   tools_3.3.2    
-##  [5] htmltools_0.3.5 yaml_2.1.14     Rcpp_0.12.9     stringi_1.1.2  
-##  [9] rmarkdown_1.3   knitr_1.15.1    stringr_1.1.0   digest_0.6.12  
-## [13] evaluate_0.10</code></pre>
+##  [1] Rcpp_0.12.9        stringdist_0.9.4.4 mvtnorm_1.0-5     
+##  [4] lattice_0.20-34    tidyr_0.6.1        zoo_1.7-14        
+##  [7] lmtest_0.9-34      assertthat_0.1     rprojroot_1.2     
+## [10] digest_0.6.12      psych_1.6.12       mime_0.5          
+## [13] R6_2.2.0           plyr_1.8.4         backports_1.0.5   
+## [16] MatrixModels_0.4-1 stats4_3.3.2       evaluate_0.10     
+## [19] coda_0.19-1        curl_2.3           multcomp_1.4-6    
+## [22] lazyeval_0.2.0     minqa_1.2.4        SparseM_1.74      
+## [25] nloptr_1.0.4       DT_0.2             rmarkdown_1.3     
+## [28] splines_3.3.2      readr_1.0.0        stringr_1.1.0     
+## [31] foreign_0.8-67     htmlwidgets_0.8    munsell_0.4.3     
+## [34] shiny_1.0.0        broom_0.4.1        httpuv_1.3.3      
+## [37] modelr_0.1.0       mnormt_1.5-5       mgcv_1.8-16       
+## [40] htmltools_0.3.5    nnet_7.3-12        tibble_1.2        
+## [43] coin_1.1-3         codetools_0.2-15   dplyr_0.5.0       
+## [46] sjmisc_2.2.1       grid_3.3.2         nlme_3.1-130      
+## [49] arm_1.9-3          xtable_1.8-2       gtable_0.2.0      
+## [52] DBI_0.5-1          magrittr_1.5       scales_0.4.1      
+## [55] stringi_1.1.2      sandwich_2.3-4     TH.data_1.0-8     
+## [58] blme_1.0-4         tools_3.3.2        purrr_0.2.2       
+## [61] sjstats_0.7.1      abind_1.4-5        parallel_3.3.2    
+## [64] pbkrtest_0.4-6     survival_2.40-1    yaml_2.1.14       
+## [67] colorspace_1.3-2   knitr_1.15.1       haven_1.0.0       
+## [70] merTools_0.3.0     quantreg_5.29      modeltools_0.2-21</code></pre>
 <pre class="r"><code>Sys.time()</code></pre>
-<pre><code>## [1] &quot;2017-02-15 08:03:14 EST&quot;</code></pre>
+<pre><code>## [1] &quot;2017-02-17 08:07:49 EST&quot;</code></pre>
 </div>
 
 
