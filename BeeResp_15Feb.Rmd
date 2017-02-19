@@ -13,7 +13,7 @@ knitr::opts_knit$set(root.dir ='/Users/callinswitzer/Documents/GitRepos/BeeRespi
 ### Summary:
 Two avenues of analysis:
 
-1.  First we see how $\Delta$load affects $\Delta$ArcLength and $\Delta$frequency, accounting for bee size and treatment order
+1.  First we see how $\Delta$load affects $\Delta$ArcLength and $\Delta$frequency^2, accounting for bee size and treatment order
 2.  We check to see how $\Delta$frequency and $\Delta$ArcLength are associated with $\Delta$MetabolicRate, while accounting for $\Delta$load
 
 ### Measured variables:
@@ -118,9 +118,12 @@ newDF <- within(newDF, {
      avgPercLoad = (perLoad_H + perLoad_L) / 2
      deltaMetR = MetR_H - MetR_L
      deltaFrq2 = freq2_H - freq2_L
+     deltaArcL = arcL_H - arcL_L
      deltaArcL2 = arcL2_H - arcL2_L
      deltaFreq2Perc = deltaFrq2 / deltaPercLoad
-     deltaLoad = load_H - load_L
+     deltaLoad = scale(load_H - load_L, center = TRUE, scale = FALSE)
+     dLoad_nonCent = load_H - load_L
+     deltaLoad2 <- deltaLoad^2
 })
 
 
@@ -136,28 +139,328 @@ plot(b2$AverageperLoad, newDF$avgPercLoad)
 abline(0,1)
 
 plot(b2$deltaload, newDF$deltaLoad)
-
-
-
+abline(0,1)
 ```
 
 
 
+### Use PCA to combine bee sizes into a single predictor
+
+```{r}
+# principle components
+aa = prcomp(newDF[, c("Mstarved", "Itspan", "S", "L")], center = TRUE, scale = TRUE)
+summary(aa) # 1st pc explains ~95% of the variance in the three measurements of size
+
+biplot(aa) # shows that all three size measurement are correlated
+
+# note, I changed the signs of the predictions so that higher PC1 values 
+# correspond to bigger bees
+p1 = -predict(aa)[,1] 
+
+# add PC1 scores to dataset
+newDF$size_pc1 = p1
+newDF$size_pc1_2 = newDF$size_pc1^2
+
+# show scatterplot matrix to see correlations among size predictors
+car::scatterplotMatrix(newDF[, c("Mstarved", "Itspan", "S",  "L",  "size_pc1")])
+```
+
+### 1.  First we see how $\Delta$load affects $\Delta$ArcLength accounting for bee size and treatment order
+
+This is the model selection procedure that was used: 
+1. Fit a large model with all two-way interactions and squared terms
+2. Remove non-significant predictors, starting with interactions, squared terms, and then main effects
+
+```{r}
+
+# reformat order so that it is more interpretable
+library(plyr)
+newDF$order_1 <- mapvalues(newDF$order_H, from = c(2, 1), to = c("loadedSecond", "loadedFirst"))
+
+# fit full model
+m1 <- lm(deltaArcL ~  (deltaLoad +  size_pc1 + order_1)^2  + 
+              size_pc1_2  + deltaLoad2, data = newDF)
+summary(m1)
+
+
+m2 <- update(m1, .~. - deltaLoad:size_pc1)
+anova(m1, m2)
+
+summary(m2)
+m3 <- update(m2, .~. - deltaLoad:order_1)
+
+anova(m2, m3)
+summary(m3)
+
+m4 <- update(m3, .~. - size_pc1:order_1)
+anova(m3, m4) 
+summary(m4)
+
+
+m5 <- update(m4, .~. - deltaLoad2)
+anova(m4,m5) 
+
+summary(m5)
+
+m6 <- update(m5, .~.  - size_pc1_2)
+anova(m6, m5) 
+summary(m6)
+
+m7 <- update(m6, .~. - order_1)
+anova(m7, m6)
+summary(m7)
+
+
+anova(m7, update(m7, .~. - deltaLoad)) # p-value for delta load
+anova(m7, update(m7, .~. - size_pc1)) # p-value for size
+
+summary(m7)
+
+# refit model with non-centered version of deltaLoad
+# this model will have a different intercept, but same p-values for slopes
+summary(update(m7, .~. - deltaLoad + dLoad_nonCent)) # final model for paper
+```
+
+
+### model diagnostics
+
+```{r}
+
+par(mfrow = c(2,2))
+plot(m7, which = 1:4) # no glaring violations, though there are a few fairly influential observation
+par(mfrow = c(1,1))
+
+car::vif(m7) 
+
+
+```
+
+### Model visualization
+
+```{r}
+summary(m7)
+
+
+# calculate partial residuals for deltaLoad
+# these are the  residuals, minus the effect of detlaLoad
+y <- residuals(m7, type = 'partial')[, "deltaLoad"]
+
+# plot partial residuals with base R plotting
+plot(x = newDF$deltaLoad, y = y)
+
+# double check to make sure the slope for partial residual plots are the 
+# same as in the original regression
+summary(lm(y ~ newDF$dLoad_nonCent)) 
+
+# this is what the raw data look like
+plot(x = newDF$deltaLoad, y = newDF$deltaArcL)
+
+
+# this package plots the partial residuals
+crPlot(m7, variable = "deltaLoad")
+
+
+# plot with ggplot2
+theme_set(theme_classic()) 
+
+# plot raw data w/ ggplot
+ggplot(newDF, aes(x= size_pc1, y = deltaArcL, color = deltaLoad)) + 
+     geom_point()
+
+ggplot(newDF, aes(x= deltaLoad, y = deltaArcL, color = size_pc1)) + 
+     geom_point()
 
 
 
+# y axis isn't easily interpretable
+ggplot(newDF, aes(x= dLoad_nonCent, y = y)) + 
+     geom_point() + 
+     labs(x = "delta load", y = "partial residuals for delta load \n i.e. delta load effect on arcL \n while subtracing affect of bee size") + 
+     stat_smooth(method = 'lm', se = FALSE)
+
+```
+
+
+### See how $\Delta$load affects  $\Delta$frequency, accounting for bee size and treatment order
+
+
+```{r}
+# fit full model
+m1 <- lm(deltaFrq2 ~  (deltaLoad +  size_pc1 + order_1)^2  + 
+              size_pc1_2  + deltaLoad2, data = newDF)
+summary(m1)
+car::vif(m1) # some serious multicollinearity
+
+m2 <- update(m1, .~. - size_pc1:order_1)
+anova(m1, m2)
+
+summary(m2)
+m3 <- update(m2, .~. - deltaLoad:size_pc1)
+
+anova(m2, m3)
+summary(m3)
+
+m4 <- update(m3, .~. - deltaLoad:order_1)
+anova(m3, m4) 
+summary(m4)
+
+m5 <- update(m4, .~. - size_pc1_2)
+anova(m4,m5) 
+
+summary(m5)
+
+m6 <- update(m5, .~.  - deltaLoad2)
+anova(m6, m5) 
+summary(m6)
+
+m7 <- update(m6, .~. - size_pc1)
+anova(m7, m6) # p-values for size
+m8 <- update(m6, .~. - deltaLoad)
+anova(m6, m8) # p-value for deltaLoad
+m9 <- update(m6, .~. - order_1)
+anova(m6, m9) # p-value for order
+
+# refit final model with non-centered deltaLoad
+m10 <- update(m6, .~. - deltaLoad + dLoad_nonCent)
+summary(m10) # final model for paper
+```
+
+
+### model diagnostics
+
+```{r}
+
+par(mfrow = c(2,2))
+plot(m10, which = 1:4) # no glaring violations
+par(mfrow = c(1,1))
+
+car::vif(m10) # vif is a little high, which
+```
+
+### model visualization
+```{r}
+# calculate partial residuals for deltaLoad
+# these are the  residuals, minus the effect of detlaLoad
+y <- residuals(m10, type = 'partial')[, "dLoad_nonCent"]
+
+# plot partial residuals with base R plotting
+plot(x = newDF$dLoad_nonCent, y = y)
+
+# double check to make sure the slope for partial residual plots are the 
+# same as in the original regression
+summary(lm(y ~ newDF$dLoad_nonCent)) 
+
+# this is what the raw data look like
+plot(x = newDF$dLoad_nonCent, y = newDF$deltaFrq2)
+
+
+# this package plots the partial residuals
+crPlot(m10, variable = "dLoad_nonCent")
+
+
+# plot with ggplot2
+# plot raw data w/ ggplot
+ggplot(newDF, aes(x= size_pc1, y = deltaFrq2, color = deltaLoad, shape = order_1)) + 
+     geom_point()
+
+ggplot(newDF, aes(x= deltaLoad, y = deltaFrq2, color = size_pc1, shape = order_1)) + 
+     geom_point()
 
 
 
+# y axis isn't easily interpretable
+ggplot(newDF, aes(x= dLoad_nonCent, y = y)) + 
+     geom_point() + 
+     labs(x = "delta load", y = "partial residuals for delta load \n i.e. delta load effect on freq^2 \n while subtracing affect of bee size and order") + 
+     stat_smooth(method = 'lm', se = FALSE)
 
 
+# partial residuals for order
+
+y <- residuals(m10, type = 'partial')[, "order_1"]
+
+ggplot(newDF, aes(x= order_1, y = y)) + 
+     geom_boxplot() + 
+     labs(x = "order", y = "partial residuals for order \n i.e. order effect on freq^2 \n while subtracing affect of bee size and load") + 
+     stat_smooth(method = 'lm', se = FALSE)
+
+# holding bee size and delta load constant, if a bee was loaded second, (confusing, huh?) then it would have a much lower freq^2 than if it was loaded first
+
+```
 
 
+### 2.  We check to see how $\Delta$frequency and $\Delta$ArcLength are associated with $\Delta$MetabolicRate, while accounting for $\Delta$load
+
+```{r}
+mm1 <- lm(deltaMetR ~ deltaFrq2 + deltaArcL + deltaLoad + size_pc1 + deltaLoad2, data = newDF)
+car::vif(mm1)
+
+summary(mm1)
+
+mm2 <- update(mm1, .~. - deltaArcL)
+anova(mm1, mm2)
+summary(mm2)
+
+mm3 <- update(mm2, .~. - size_pc1)
+anova(mm3, mm2)
+summary(mm3)
+
+mm4 <- update(mm3, .~. - deltaLoad2)
+anova(mm3, mm4)
+summary(mm4)
+
+mm5 <- update(mm4, .~. - deltaLoad) 
+anova(mm5, mm4) # p-value for load
+
+mm6 <- update(mm4, .~. - deltaFrq2)
+anova(mm4, mm6) # p-value for deltafrq2
+
+# refit model with non-centered load
+mm7 <- update(mm4, .~. - deltaLoad + dLoad_nonCent)
+
+summary(mm7) # final model for paper
 
 
+```
+
+### model diagnostics
+
+```{r}
+
+car::vif(mm7)
+
+par(mfrow = c(2,2))
+plot(mm7, which = 1:4) # no glaring violations
+par(mfrow = c(1,1))
+
+```
 
 
+### model visualization
 
+```{r}
+
+# calculate partial residuals for deltaLoad
+# these are the  residuals, minus the effect of detlaLoad
+y <- residuals(mm7, type = 'partial')[, "dLoad_nonCent"]
+
+# plot partial residuals with base R plotting
+plot(x = newDF$dLoad_nonCent, y = y)
+
+# double check to make sure the slope for partial residual plots are the 
+# same as in the original regression
+summary(lm(y ~ newDF$dLoad_nonCent)) 
+summary(mm7)
+
+# this is what the raw data look like
+plot(x = newDF$dLoad_nonCent, y = newDF$deltaMetR)
+
+
+# this package plots the partial residuals
+crPlot(mm7, variable = "dLoad_nonCent")
+crPlot(mm7, variable = "deltaFrq2")
+
+```
 
 
 
