@@ -178,7 +178,7 @@ library(plyr)
 newDF$order_1 <- mapvalues(newDF$order_H, from = c(2, 1), to = c("loadedSecond", "loadedFirst"))
 
 # fit full model
-m1 <- lm(deltaArcL ~  (deltaLoad +  size_pc1 + order_1)^2  + 
+m1 <- lm(deltaArcL2 ~  (deltaLoad +  size_pc1 + order_1)^2  + 
               size_pc1_2  + deltaLoad2, data = newDF)
 summary(m1)
 
@@ -227,15 +227,14 @@ summary(update(m7, .~. - deltaLoad + dLoad_nonCent)) # final model for paper
 ```{r}
 
 par(mfrow = c(2,2))
-plot(m7, which = 1:4) # no glaring violations, though there are a few fairly influential observation
+plot(m7, which = 1:4) # no glaring violations, though there are a few fairly influential observations
 par(mfrow = c(1,1))
 
 car::vif(m7) 
-
-
 ```
 
 ### Model visualization
+# refref: Double check that these visualizations are using the correct response variable
 
 ```{r}
 summary(m7)
@@ -253,7 +252,7 @@ plot(x = newDF$deltaLoad, y = y)
 summary(lm(y ~ newDF$dLoad_nonCent)) 
 
 # this is what the raw data look like
-plot(x = newDF$deltaLoad, y = newDF$deltaArcL)
+plot(x = newDF$deltaLoad, y = newDF$deltaFrq2)
 
 
 # this package plots the partial residuals
@@ -275,7 +274,7 @@ ggplot(newDF, aes(x= deltaLoad, y = deltaArcL, color = size_pc1)) +
 # y axis isn't easily interpretable
 ggplot(newDF, aes(x= dLoad_nonCent, y = y)) + 
      geom_point() + 
-     labs(x = "delta load", y = "partial residuals for delta load \n i.e. delta load effect on arcL \n while subtracing affect of bee size") + 
+     labs(x = "delta load", y = "partial residuals for delta load \n i.e. delta load effect on arcL^2 \n while subtracing affect of bee size") + 
      stat_smooth(method = 'lm', se = FALSE)
 
 ```
@@ -334,7 +333,7 @@ par(mfrow = c(2,2))
 plot(m10, which = 1:4) # no glaring violations
 par(mfrow = c(1,1))
 
-car::vif(m10) # vif is a little high, which
+car::vif(m10) # vif is a little high
 ```
 
 ### model visualization
