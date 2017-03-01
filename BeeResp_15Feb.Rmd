@@ -492,8 +492,12 @@ summary(mm7) # final model for paper
 3. Holding deltaLoad constant (not holding load constant, and again, not holding deltaload necessarily at 0), an increase in deltaFreq^2 is associated with an increase in deltaMetabolic rate. 
 4. We found no evidence to suggest that a change in deltaArcL^2 is associated with deltametabolicRate. (this is not saying that arcLength doesn't affect metabolic rate).
 
+<hr>
 
+Refref:
+Do regression for Average percent loading vs. delta metabolic rate / 1% load etc. It's the last page of the document Susie sent (3 different response variables).
 
+Covariates: avg % load, order, bee size.
 
 
 
