@@ -1,7 +1,7 @@
 ---
 title: "BeeResp_15Feb"
 author: "Callin Switzer"
-date: "February 15, 2017"
+date: "February 15, 2017; Update 1 March 2017"
 output: html_document
 ---
 
@@ -13,7 +13,7 @@ knitr::opts_knit$set(root.dir ='/Users/callinswitzer/Documents/GitRepos/BeeRespi
 ### Summary:
 Two avenues of analysis:
 
-1.  First we see how $\Delta$load affects $\Delta$ArcLength and $\Delta$frequency^2, accounting for bee size and treatment order
+1.  First we see how $\Delta$load affects $\Delta$ArcLength^2 and $\Delta$frequency^2, accounting for bee size and treatment order
 2.  We check to see how $\Delta$frequency and $\Delta$ArcLength are associated with $\Delta$MetabolicRate, while accounting for $\Delta$load
 
 ### Measured variables:
@@ -61,13 +61,12 @@ ipak(packages)
 # read in data -- google sheet called "Final Bee Resp Data"
 url = 'https://docs.google.com/spreadsheets/d/1wT-QxSJJElhhJcIXlg2hDpFKHbLyFGuqNNj2iYvA8Vo/edit?usp=sharing'
 bdta <- data.frame(gsheet2tbl(url))
+summary(bdta)
 ```
 
 
 # Calculate variables
 ```{r}
-
-colnames(bdta)
 bdta <- within(bdta, {
      MT = (M2 + MF)/2
      load = MT - Mstarved
@@ -83,15 +82,12 @@ bdta <- within(bdta, {
      Treatment = as.factor(as.character(Treatment))
      BeeID = as.factor(as.character(BeeID))
 })
-
 ```
 
 
 ### Create a new dataframe that calculates the changes for each bee
 ```{r}
-colnames(bdta)
 # convert from long to wide
-varb = "M2"
 newDF <- data.frame()
 colsTocalc = c("order", "M2", "MF", "MetR", "freq", "amp", "load", "MT", "perLoad", "frce", "arcL2", "freq2", "U", "arcL")
 for(varb in colsTocalc){
@@ -105,7 +101,6 @@ for(varb in colsTocalc){
 }
 
 head(newDF)
-
 ```
 
 
@@ -126,6 +121,8 @@ newDF <- within(newDF, {
      deltaLoad2 <- deltaLoad^2
 })
 
+
+plot(newDF$deltaArcL2 ~ newDF$deltaFrq2)
 
 # compare with Susie's calculations
 
@@ -234,7 +231,6 @@ car::vif(m7)
 ```
 
 ### Model visualization
-# refref: Double check that these visualizations are using the correct response variable
 
 ```{r}
 summary(m7)
@@ -278,6 +274,15 @@ ggplot(newDF, aes(x= dLoad_nonCent, y = y)) +
      stat_smooth(method = 'lm', se = FALSE)
 
 ```
+
+<hr>
+
+### Takeaways from model 1:
+1.  A higher deltaload (i.e. a relatively larger "high" load) causes bees to have a larger change in arclength squared.  Another way to say this is that increasing the change in load by 1 gram causes an increase in the change in arclength^2 by 0.002059 degrees.
+2. The larger the bee, the lower the change in arcLength^2 (association, rather than causation), while holding the change in load constant. 
+3. We do not have enough evidence to notice any non-linear relationships in this model.
+
+<hr>
 
 
 ### See how $\Delta$load affects  $\Delta$frequency, accounting for bee size and treatment order
@@ -385,22 +390,42 @@ ggplot(newDF, aes(x= order_1, y = y)) +
 
 # holding bee size and delta load constant, if a bee was loaded second, (confusing, huh?) then it would have a much lower freq^2 than if it was loaded first
 
+summary(m10)
 ```
 
+
+
+<hr>
+### Takeaways from model 2:
+1. Order, size, and deltaLoad are associated with a change in frequency^2.  We find no evidence of non-linear relationships or interactions.
+2. Holding size and order constant, we find that a larger deltaLoad causes a decrease in deltaFrequency^2
+3. Holding other variables constant, an increase in bee size is associated with a larger deltaFrequency^2.
+4. Holding other variables constant, if the bee was loaded second, then they had a lower deltaFrequency^2 than if they were loaded first. 
+
+```{r}
+# make some predictions
+predDF <- data.frame(size_pc1 = 0, order_1 = c("loadedSecond", "loadedFirst"), dLoad_nonCent = mean(newDF$dLoad_nonCent))
+
+predDF$pred_deltaF2 <- predict(m10, predDF)
+
+predDF
+```
+
+<hr>
 
 ### 2.  We check to see how $\Delta$frequency and $\Delta$ArcLength are associated with $\Delta$MetabolicRate, while accounting for $\Delta$load
 
 ```{r}
-mm1 <- lm(deltaMetR ~ deltaFrq2 + deltaArcL + deltaLoad + size_pc1 + deltaLoad2, data = newDF)
+mm1 <- lm(deltaMetR ~ deltaFrq2 + deltaArcL2 + deltaLoad + size_pc1 + deltaLoad2, data = newDF)
 car::vif(mm1)
 
 summary(mm1)
 
-mm2 <- update(mm1, .~. - deltaArcL)
+mm2 <- update(mm1, .~. - size_pc1)
 anova(mm1, mm2)
 summary(mm2)
 
-mm3 <- update(mm2, .~. - size_pc1)
+mm3 <- update(mm2, .~. - deltaArcL2)
 anova(mm3, mm2)
 summary(mm3)
 
@@ -418,8 +443,6 @@ anova(mm4, mm6) # p-value for deltafrq2
 mm7 <- update(mm4, .~. - deltaLoad + dLoad_nonCent)
 
 summary(mm7) # final model for paper
-
-
 ```
 
 ### model diagnostics
@@ -458,10 +481,16 @@ plot(x = newDF$dLoad_nonCent, y = newDF$deltaMetR)
 # this package plots the partial residuals
 crPlot(mm7, variable = "dLoad_nonCent")
 crPlot(mm7, variable = "deltaFrq2")
+summary(mm7) # final model for paper
 
 ```
 
-
+<hr>
+### Takeaways for model 3:
+1. Deltafreq^2 and deltaLoad are both associated with deltaMetR.
+2. Holding deltafreq constant (not necessarily at 0), an increase in deltaload is associated with an increase in deltametabolicRate
+3. Holding deltaLoad constant (not holding load constant, and again, not holding deltaload necessarily at 0), an increase in deltaFreq^2 is associated with an increase in deltaMetabolic rate. 
+4. We found no evidence to suggest that a change in deltaArcL^2 is associated with deltametabolicRate. (this is not saying that arcLength doesn't affect metabolic rate).
 
 
 
