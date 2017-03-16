@@ -6,7 +6,7 @@
 .DS_Store
 
 # .csv (data) files
-*.csv
+# *.csv
 
 # knitr and R markdown default cache directories
 /*_cache/
