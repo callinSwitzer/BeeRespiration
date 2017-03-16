@@ -274,8 +274,6 @@ ggplot(newDF, aes(x= dLoad_nonCent, y = y)) +
      stat_smooth(method = 'lm', se = FALSE)
 
 partialResidDeltaLoad <- data.frame(deltaLoad = newDF$dLoad_nonCent, partResArcL2 = y )
-
-
 ```
 
 <hr>
@@ -353,8 +351,6 @@ y <- residuals(m10, type = 'partial')[, "dLoad_nonCent"]
 partialResidDeltaLoad <- cbind(partialResidDeltaLoad, y)
 colnames(partialResidDeltaLoad)[3] <- "partResFreq2"
 
-
-write.csv(partialResidDeltaLoad, file = "PartialResidArcL2.csv", row.names = FALSE)
 
 # plot partial residuals with base R plotting
 plot(x = newDF$dLoad_nonCent, y = y)
@@ -477,6 +473,11 @@ y <- residuals(mm7, type = 'partial')[, "dLoad_nonCent"]
 
 # plot partial residuals with base R plotting
 plot(x = newDF$dLoad_nonCent, y = y)
+
+partialResidDeltaLoad <- cbind(partialResidDeltaLoad, y)
+colnames(partialResidDeltaLoad)[4] <- "partResDeltaMetR"
+
+write.csv(partialResidDeltaLoad, file = "PartialResidDeltaLoad.csv", row.names = FALSE)
 
 # double check to make sure the slope for partial residual plots are the 
 # same as in the original regression
