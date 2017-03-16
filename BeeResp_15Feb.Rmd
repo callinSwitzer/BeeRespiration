@@ -1,7 +1,7 @@
 ---
 title: "BeeResp_15Feb"
 author: "Callin Switzer"
-date: "February 15, 2017; Update 1 March 2017"
+date: "February 15, 2017; Update 1 March 2017; Update March 16"
 output: html_document
 ---
 
@@ -55,7 +55,7 @@ ipak <- function(pkg){
 }
 
 packages <- c('ggplot2', 'car', 'lme4', 'gsheet', "MASS",'reshape2', 
-              'influence.ME', 'sjPlot', "effects", 'visreg')
+              'influence.ME', 'sjPlot', "effects", 'visreg', 'viridis')
 ipak(packages)
 
 # read in data -- google sheet called "Final Bee Resp Data"
@@ -497,10 +497,210 @@ summary(mm7) # final model for paper
 Refref:
 Do regression for Average percent loading vs. delta metabolic rate / 1% load etc. It's the last page of the document Susie sent (3 different response variables).
 
+
 Covariates: avg % load, order, bee size.
 
+# (DeltaMetRate / avgPercLoad) ~ avgPercLoad + order_1 + size_pc1
+
+```{r}
+
+newDF <- within(newDF, {dmr_apl = deltaMetR / avgPercLoad})
+
+mod1 <- lm(dmr_apl  ~ avgPercLoad + order_1 + size_pc1, data = newDF)
+summary(mod1)
+
+mod2 <- update(mod1, .~. - size_pc1)
+anova(mod1, mod2) # remove size_pc1
+
+summary(mod2) # final model for paper
+
+# get p-values for avgPercLoad and order
+anova(mod2,  update(mod2, .~. - order_1)) # p-value for order
+anova(mod2, update(mod2, .~. - avgPercLoad)) # p-value for avg perc load
+
+# plot(I(deltaMetR)  ~ avgPercLoad, data = newDF)
+# plot(I(deltaMetR / avgPercLoad)  ~ deltaMetR, data = newDF)
+
+car::scatterplotMatrix(newDF[, c("avgPercLoad", "deltaMetR", "size_pc1")])
+car::vif(mod1)  # looks fine
+car::vif(mod2)
+
+par(mfrow = c(2,2))
+plot(mod2) # possible nonlinear trend in residuals
+
+plot(mod1, which = 4)
+
+# update model to add a non-linear term
+newDF <- within(newDF, {avgPercLoad_cent = as.numeric(scale(newDF$avgPercLoad, center = TRUE, scale = FALSE))})
+newDF$apl_cent2 <- with(newDF, avgPercLoad_cent^2)
+
+m11 <- lm(dmr_apl  ~ avgPercLoad_cent  + apl_cent2 + order_1 + size_pc1, data = newDF)
+summary(m11)
+car::vif(m11) # vif is much better with centered variables
+
+m11a <- update(m11, .~. - size_pc1)
+anova(m11, m11a) # remove size_pc1
 
 
+m11b <- update(m11a, .~. - apl_cent2)
+anova(m11a, m11b) # drop squared term
+summary(m11b)
+
+
+par(mfrow = c(2,2))
+plot(m11b) # residuals look much better
+
+plot(m11b, which = 4)
+
+summary(m11b)
+
+## visualize model for deltametRate/avgPercLoading
+
+par(mfrow = c(1,1))
+plot(dmr_apl  ~ avgPercLoad, col = factor(order_1), data = newDF, pch = 20)
+
+ndf <- data.frame(avgPercLoad_cent = seq(min(newDF$avgPercLoad_cent), max(newDF$avgPercLoad_cent), length.out = 200), 
+                  order_1 = as.factor(rep(c("loadedFirst", "loadedSecond"), 100)))
+
+ndf$apl_cent2 <- ndf$avgPercLoad_cent^2
+
+ndf$avgPercLoad <- ndf$avgPercLoad_cent + mean(newDF$avgPercLoad)
+predDF <- data.frame(preds = predict(mod2, newdata = ndf), ndf)
+
+ggplot(newDF, aes(x = avgPercLoad, y = dmr_apl)) + 
+     geom_point(aes(color = order_1), , shape = 17) + 
+     geom_line(data = predDF, aes(x = avgPercLoad, y = preds, color = order_1)) + 
+     labs(x = "Average Load (% bodymass)", 
+          y = "Change in Metabolic Rate (mL CO2 / hr) / \n Average Load (% bodymass)") + 
+     scale_color_viridis( name = "Order", discrete = TRUE, end = 0.8) + 
+     theme(legend.position = c(0.8,0.8))
+ggsave("dmr_apl.pdf", width = 5, height = 4)
+```
+
+# (DeltaFrq^2/avgPercload) ~ avgPercLoad + order_1 + size_pc1
+
+```{r}
+newDF <- within(newDF, {df2_apl = deltaFrq2 / avgPercLoad})
+par(mfrow = c(1,1))
+plot(df2_apl ~ avgPercLoad, newDF)
+
+mod1_f <- lm(df2_apl  ~ avgPercLoad + order_1 + size_pc1, data = newDF)
+summary(mod1_f)
+
+mod2_f <- update(mod1_f, .~. - size_pc1)
+anova(mod1_f, mod2_f) # remove size_pc1
+
+
+
+summary(mod2_f) # not final model for paper
+
+# get p-values for avgPercLoad 
+anova(mod2_f,  update(mod2_f, .~. - order_1)) # p-value for order
+
+par(mfrow = c(2,2))
+plot(mod2_f) # non-linearity in residuals
+
+plot(mod2_f, which = 4)
+
+
+# update model to add a non-linear term
+m22 <- lm(df2_apl  ~ avgPercLoad_cent  + apl_cent2 + order_1 + size_pc1, data = newDF)
+summary(m22)
+car::vif(m22) # vif is much better with centered variables
+
+m22a <- update(m22, .~. - size_pc1)
+anova(m22, m22a) # remove size_pc1
+
+summary(m22a)
+par(mfrow = c(2,2))
+plot(m22a) # residuals look much better
+
+plot(m22a, which = 4)
+
+summary(m22a) # final model for paper (though we could also report the non-centered values)
+
+## visualize model for deltametRate/avgPercLoading
+
+ndf <- data.frame(avgPercLoad_cent = seq(min(newDF$avgPercLoad_cent), max(newDF$avgPercLoad_cent), length.out = 200), 
+                  order_1 = as.factor(rep(c("loadedFirst", "loadedSecond"), 100)))
+
+ndf$apl_cent2 <- ndf$avgPercLoad_cent^2
+
+ndf$apl <- ndf$avgPercLoad_cent + mean(newDF$avgPercLoad)
+
+predDF <- data.frame(preds = predict(m22a, newdata = ndf, se = TRUE), ndf)
+
+par(mfrow = c(1,1))
+plot(df2_apl  ~ avgPercLoad, col = factor(order_1), data = newDF, pch = 20)
+
+
+ggplot(newDF, aes(x = avgPercLoad, y = df2_apl)) + 
+     geom_point(aes(color = order_1), , shape = 17) + 
+     geom_line(data = predDF, aes(x = apl, y = preds.fit, color = order_1)) + 
+     # geom_line(data = predDF, aes(x = apl, y = preds.fit + 1.96*preds.se.fit, color = order_1), lty = 2) + 
+     # geom_line(data = predDF, aes(x = apl, y = preds.fit - 1.96*preds.se.fit, color = order_1), lty = 2) + 
+     labs(x = "Average Load (% bodymass)", 
+          y = "Change in wingbeat freq^2 (hz^2) / \n Average Load (% bodymass)") + 
+     scale_color_viridis( name = "Order", discrete = TRUE, end = 0.8) + 
+     theme(legend.position = c(0.8,0.8)) 
+ggsave("df2_apl.pdf", width = 5, height = 4)
+```
+
+
+
+# (DeltaArcL^2/avgPercload) ~ avgPercLoad + order_1 + size_pc1
+
+```{r}
+newDF <- within(newDF, {da2_apl = deltaArcL2 / avgPercLoad})
+
+par(mfrow = c(1,1))
+plot(da2_apl ~ avgPercLoad, ylab = c("deltaArcL^2 / avgPercLoad"), newDF)
+
+mod1_a <- lm(da2_apl  ~ avgPercLoad + order_1 + size_pc1, data = newDF)
+summary(mod1_a)
+
+mod2_a <- update(mod1_a, .~. - size_pc1)
+anova(mod1_a, mod2_a) # remove size_pc1
+
+summary(mod2_a) # final model for paper
+
+# get p-values for avgPercLoad and order
+anova(mod2_a,  update(mod2_a, .~. - order_1)) # p-value for order
+anova(mod2_a, update(mod2_a, .~. - avgPercLoad)) # p-value for avg perc load
+
+par(mfrow = c(2,2))
+plot(mod2_a)
+
+plot(mod2_a, which = 4)
+
+# visualize model
+
+ndf <- data.frame(avgPercLoad_cent = seq(min(newDF$avgPercLoad_cent), max(newDF$avgPercLoad_cent), length.out = 200), 
+                  order_1 = as.factor(rep(c("loadedFirst", "loadedSecond"), 100)))
+
+ndf$apl_cent2 <- ndf$avgPercLoad_cent^2
+
+ndf$avgPercLoad <- ndf$avgPercLoad_cent + mean(newDF$avgPercLoad)
+
+predDF <- data.frame(preds = predict(mod2_a, newdata = ndf, se = TRUE), ndf)
+
+par(mfrow = c(1,1))
+plot(da2_apl  ~ avgPercLoad, col = factor(order_1), data = newDF, pch = 20)
+
+
+ggplot(newDF, aes(x = avgPercLoad, y = da2_apl)) + 
+     geom_point(aes(color = order_1), shape = 17) + 
+     geom_line(data = predDF, aes(x = avgPercLoad, y = preds.fit, color = order_1)) + 
+     # geom_line(data = predDF, aes(x = apl, y = preds.fit + 1.96*preds.se.fit, color = order_1), lty = 2) + 
+     # geom_line(data = predDF, aes(x = apl, y = preds.fit - 1.96*preds.se.fit, color = order_1), lty = 2) + 
+     labs(x = "Average Load (% bodymass)", 
+          y = "Change in arc length^2 (radians^2) / \n Average Load (% bodymass)") + 
+     scale_color_viridis( name = "Order", discrete = TRUE, end = 0.8) + 
+     theme(legend.position = c(0.8,0.8)) 
+ggsave("da2_apl.pdf", width = 5, height = 4)
+
+
+```
 
 
 # Session Info
