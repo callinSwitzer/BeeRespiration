@@ -504,7 +504,7 @@ Covariates: avg % load, order, bee size.
 
 ```{r}
 
-newDF <- within(newDF, {dmr_apl = deltaMetR / avgPercLoad})
+newDF <- within(newDF, {dmr_apl = deltaMetR / deltaPercLoad})
 
 mod1 <- lm(dmr_apl  ~ avgPercLoad + order_1 + size_pc1, data = newDF)
 summary(mod1)
@@ -580,7 +580,7 @@ ggsave("dmr_apl.pdf", width = 5, height = 4)
 # (DeltaFrq^2/avgPercload) ~ avgPercLoad + order_1 + size_pc1
 
 ```{r}
-newDF <- within(newDF, {df2_apl = deltaFrq2 / avgPercLoad})
+newDF <- within(newDF, {df2_apl = deltaFrq2 / deltaPercLoad})
 par(mfrow = c(1,1))
 plot(df2_apl ~ avgPercLoad, newDF)
 
@@ -651,7 +651,7 @@ ggsave("df2_apl.pdf", width = 5, height = 4)
 # (DeltaArcL^2/avgPercload) ~ avgPercLoad + order_1 + size_pc1
 
 ```{r}
-newDF <- within(newDF, {da2_apl = deltaArcL2 / avgPercLoad})
+newDF <- within(newDF, {da2_apl = deltaArcL2 / deltaPercLoad})
 
 par(mfrow = c(1,1))
 plot(da2_apl ~ avgPercLoad, ylab = c("deltaArcL^2 / avgPercLoad"), newDF)
