@@ -479,6 +479,9 @@ colnames(partialResidDeltaLoad)[4] <- "partResDeltaMetR"
 
 write.csv(partialResidDeltaLoad, file = "PartialResidDeltaLoad.csv", row.names = FALSE)
 
+# visualize partial residuals (the leftmost column is what we're plotting)
+scatterplotMatrix(partialResidDeltaLoad)
+
 # double check to make sure the slope for partial residual plots are the 
 # same as in the original regression
 summary(lm(y ~ newDF$dLoad_nonCent)) 
@@ -513,6 +516,10 @@ Covariates: avg % load, order, bee size.
 # (DeltaMetRate / deltaPerLoad) ~ avgPercLoad + order_1 + size_pc1
 
 ```{r}
+
+plot(deltaFrq2  ~ deltaPercLoad, data = newDF)
+plot(deltaMetR  ~ deltaPercLoad, data = newDF)
+plot(deltaArcL2  ~ deltaPercLoad, data = newDF)
 
 newDF <- within(newDF, {dmr_dpl = deltaMetR / deltaPercLoad})
 
@@ -589,7 +596,11 @@ ggplot(newDF, aes(x = avgPercLoad, y = dmr_dpl)) +
 ggsave("dmr_dpl.pdf", width = 5, height = 4)
 ```
 
-# (DeltaFrq^2/avgPercload) ~ avgPercLoad + order_1 + size_pc1
+# (DeltaFrq^2/deltaPercLoad) ~ avgPercLoad + order_1 + size_pc1
+
+# refref: why not just put deltaPercLoad into the predictors?
+
+
 
 ```{r}
 newDF <- within(newDF, {df2_dpl = deltaFrq2 / deltaPercLoad})
@@ -597,6 +608,15 @@ par(mfrow = c(1,1))
 plot(df2_dpl ~ avgPercLoad, newDF)
 
 mod1_f <- lm(df2_dpl  ~ avgPercLoad + order_1 + size_pc1, data = newDF)
+
+# refref: this might be better
+mod1_f_DL <- lm(deltaFrq2  ~ deltaPercLoad +  avgPercLoad + order_1 + size_pc1, data = newDF)
+
+
+summary(mod1_f_DL)
+car::vif(mod1_f_DL)
+
+
 summary(mod1_f)
 
 mod2_f <- update(mod1_f, .~. - size_pc1)
@@ -622,6 +642,7 @@ car::vif(m22) # vif is much better with centered variables
 
 m22a <- update(m22, .~. - size_pc1)
 anova(m22, m22a) # remove size_pc1
+
 
 summary(m22a)
 par(mfrow = c(2,2))
@@ -678,7 +699,7 @@ ggsave("df2_dpl.pdf", width = 5, height = 4)
 
 
 
-# (DeltaArcL^2/avgPercload) ~ avgPercLoad + order_1 + size_pc1
+# (DeltaArcL^2/deltaPerLoad) ~ avgPercLoad + order_1 + size_pc1
 
 ```{r}
 newDF <- within(newDF, {da2_dpl = deltaArcL2 / deltaPercLoad})
@@ -733,6 +754,28 @@ ggplot(newDF, aes(x = avgPercLoad, y = da2_dpl)) +
      scale_color_viridis( name = "Order", discrete = TRUE, end = 0.8) + 
      theme(legend.position = c(0.8,0.8)) 
 ggsave("da2_dpl.pdf", width = 5, height = 4)
+
+
+```
+
+
+```{r}
+mod1_a_a <- lm(deltaArcL2  ~ deltaPercLoad + avgPercLoad + order_1 + size_pc1, data = newDF)
+summary(mod1_a_a)
+
+m2 <- update(mod1_a_a, .~. - avgPercLoad)
+anova(mod1_a_a, m2)
+
+
+summary(m2)
+m3 <- update(m2, .~. - order_1)
+anova(m2, m3)
+
+summary(m3)
+m4 <- update(m3, .~. - size_pc1)
+anova(m3, m4)
+
+summary(m4)
 
 
 ```
