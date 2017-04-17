@@ -448,6 +448,37 @@ anova(mm4, mm6) # p-value for deltafrq2
 mm7 <- update(mm4, .~. - deltaLoad + dLoad_nonCent)
 
 summary(mm7) # final model for paper
+
+# make a partial residual plot for delta arcl2 (not sure if this is the best way)
+mm8 <- update(mm7, .~. + deltaArcL2)
+summary(mm8)
+
+
+crPlot(mm8, variable = "deltaArcL2")
+crPlot(mm8, variable = "dLoad_nonCent")
+crPlot(mm8, variable = "deltaFrq2")
+
+
+# calculate partial residuals from model 7 for deltaload and deltafreq2
+
+prDload <- residuals(mm7, type = 'partial')[, "dLoad_nonCent"]
+prDfreq2 <- residuals(mm7, type = 'partial')[, "deltaFrq2"]
+
+
+# plot partial residuals with base R plotting
+plot(x = newDF$dLoad_nonCent, y = prDload)
+plot(x = newDF$deltaFrq2, y = prDfreq2)
+
+partResidFig4 <- data.frame(deltaLoad = newDF$dLoad_nonCent, 
+                            partResDeltaLoad = prDload, 
+                            deltaFreq2 = newDF$deltaFrq2, 
+                            partResDeltaFreq2 = prDfreq2)
+
+
+write.csv(partResidFig4, file = "PartialResidFig4.csv", row.names = FALSE)
+
+
+
 ```
 
 ### model diagnostics
@@ -522,6 +553,7 @@ plot(deltaMetR  ~ deltaPercLoad, data = newDF)
 plot(deltaArcL2  ~ deltaPercLoad, data = newDF)
 
 newDF <- within(newDF, {dmr_dpl = deltaMetR / deltaPercLoad})
+plot(deltaMetR  ~ dmr_dpl, data = newDF)
 
 mod1 <- lm(dmr_dpl  ~ avgPercLoad + order_1 + size_pc1, data = newDF)
 summary(mod1)
@@ -604,8 +636,11 @@ ggsave("dmr_dpl.pdf", width = 5, height = 4)
 
 ```{r}
 newDF <- within(newDF, {df2_dpl = deltaFrq2 / deltaPercLoad})
+
+hist(newDF$df2_dpl)
 par(mfrow = c(1,1))
 plot(df2_dpl ~ avgPercLoad, newDF)
+plot(deltaFrq2 ~ df2_dpl, data = newDF)
 
 mod1_f <- lm(df2_dpl  ~ avgPercLoad + order_1 + size_pc1, data = newDF)
 
@@ -703,6 +738,8 @@ ggsave("df2_dpl.pdf", width = 5, height = 4)
 
 ```{r}
 newDF <- within(newDF, {da2_dpl = deltaArcL2 / deltaPercLoad})
+
+plot(deltaArcL2 ~ da2_dpl, data = newDF)
 
 par(mfrow = c(1,1))
 plot(da2_dpl ~ avgPercLoad, ylab = c("deltaArcL^2 / avgPercLoad"), newDF)
