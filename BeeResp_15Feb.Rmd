@@ -449,15 +449,6 @@ mm7 <- update(mm4, .~. - deltaLoad + dLoad_nonCent)
 
 summary(mm7) # final model for paper
 
-# make a partial residual plot for delta arcl2 (not sure if this is the best way)
-mm8 <- update(mm7, .~. + deltaArcL2)
-summary(mm8)
-
-
-crPlot(mm8, variable = "deltaArcL2")
-crPlot(mm8, variable = "dLoad_nonCent")
-crPlot(mm8, variable = "deltaFrq2")
-
 
 # calculate partial residuals from model 7 for deltaload and deltafreq2
 
