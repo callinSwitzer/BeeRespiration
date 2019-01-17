@@ -3,6 +3,8 @@ title: "BeeResp_15Feb"
 author: "Callin Switzer"
 date: "February 15, 2017; Update 1 March 2017; Update March 16"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -57,6 +59,9 @@ ipak <- function(pkg){
 packages <- c('ggplot2', 'car', 'lme4', 'gsheet', "MASS",'reshape2', 
               'influence.ME', 'sjPlot', "effects", 'visreg', 'viridis')
 ipak(packages)
+
+# set ggplot theme
+theme_set(theme_classic())
 
 # read in data -- google sheet called "Final Bee Resp Data"
 url = 'https://docs.google.com/spreadsheets/d/1wT-QxSJJElhhJcIXlg2hDpFKHbLyFGuqNNj2iYvA8Vo/edit?usp=sharing'
@@ -124,19 +129,19 @@ newDF <- within(newDF, {
 
 plot(newDF$deltaArcL2 ~ newDF$deltaFrq2)
 
-# compare with Susie's calculations
-
-
-
-b2 <- read.csv("~/Desktop/b2.csv")
-b2 <- b2[!is.na(b2$deltaperload), ]
-b2 <- b2[order(b2$BeeID, b2$Treatment), ]
-
-plot(b2$AverageperLoad, newDF$avgPercLoad)
-abline(0,1)
-
-plot(b2$deltaload, newDF$deltaLoad)
-abline(0,1)
+# # compare with Susie's calculations
+# 
+# 
+# 
+# b2 <- read.csv("~/Desktop/b2.csv")
+# b2 <- b2[!is.na(b2$deltaperload), ]
+# b2 <- b2[order(b2$BeeID, b2$Treatment), ]
+# 
+# plot(b2$AverageperLoad, newDF$avgPercLoad)
+# abline(0,1)
+# 
+# plot(b2$deltaload, newDF$deltaLoad)
+# abline(0,1)
 ```
 
 
@@ -161,6 +166,36 @@ newDF$size_pc1_2 = newDF$size_pc1^2
 # show scatterplot matrix to see correlations among size predictors
 car::scatterplotMatrix(newDF[, c("Mstarved", "Itspan", "S",  "L",  "size_pc1")])
 ```
+
+
+### PLot metabolic rate vs. body mass + load
+```{r}
+colnames(newDF)
+
+ggplot(newDF, aes(x = Mstarved + load_H, y = MetR_H )) + 
+  geom_point(shape = 1) + 
+  stat_smooth(method = "lm", se = F) + 
+  geom_point(aes(x = Mstarved + load_L, y = MetR_L)) + 
+  stat_smooth(aes(x = Mstarved + load_L, y = MetR_L), method = "lm", se = F) + 
+  lims(x = c(0.05,0.4), y = c(2, 18))
+
+
+# calculate R^2
+mod1 <- lm(MetR_H ~ I(Mstarved + load_H), data = newDF)
+
+# diagnostics
+par(mfrow = c(2,3))
+plot(mod1, which = 1:6)
+dev.off()
+
+summary(mod1)
+
+
+mod2 <-  lm(MetR_L ~ I(Mstarved + load_L), data = newDF)
+summary(mod2)
+
+```
+
 
 ### 1.  First we see how $\Delta$load affects $\Delta$ArcLength accounting for bee size and treatment order
 
