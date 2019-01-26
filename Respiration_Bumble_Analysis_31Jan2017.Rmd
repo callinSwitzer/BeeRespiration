@@ -3,6 +3,8 @@ title: "Bee Respiration for Susie and Stacey"
 author: "Callin Switzer"
 date: "11/4/2016, Update: 12/13/2016"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 Analyses of respirometry data:
